@@ -1,0 +1,60 @@
+// Frida script to dump raw memory content of FirstApp (Gadget-injected)
+
+// Helper function to format bytes as hex and ASCII
+function formatMemory(address, bytes, length) {
+    let hex = '';
+    let ascii = '';
+    for (let i = 0; i < length; i++) {
+        let byte = bytes[i] & 0xff;
+        hex += byte.toString(16).padStart(2, '0') + ' ';
+        ascii += (byte >= 0x20 && byte <= 0x7e) ? String.fromCharCode(byte) : '.';
+        if ((i + 1) % 16 === 0) {
+            hex += '  ';
+        }
+    }
+    return `${address}: ${hex.padEnd(55)}| ${ascii}`;
+}
+
+// Function to dump memory content
+function dumpMemory() {
+    console.log("[*] Starting memory dump for FirstApp...");
+
+    // Enumerate readable memory ranges
+    let ranges = Process.enumerateRanges('r--');
+    console.log(`[*] Found ${ranges.length} readable memory ranges`);
+
+    ranges.forEach(function(range, index) {
+        console.log(`[*] Dumping range ${index + 1}/${ranges.length}: ${range.base} - ${range.size} bytes`);
+
+        try {
+            // Read memory in chunks of 64 bytes
+            let chunkSize = 64;
+            for (let offset = 0; offset < range.size; offset += chunkSize) {
+                let address = range.base.add(offset);
+                let sizeToRead = Math.min(chunkSize, range.size - offset);
+
+                try {
+                    // Read raw bytes
+                    let bytes = address.readByteArray(sizeToRead);
+                    let byteArray = new Uint8Array(bytes);
+
+                    // Format and print
+                    console.log(formatMemory(address, byteArray, sizeToRead));
+                } catch (e) {
+                    console.log(`[ERROR] Failed to read at ${address}: ${e}`);
+                }
+            }
+        } catch (e) {
+            console.log(`[ERROR] Failed to process range ${range.base}: ${e}`);
+        }
+        console.log(`[*] Completed0 Completed dumping range: ${range.base}`);
+    });
+
+    console.log("[*] Memory dump completed.");
+}
+
+// Main execution
+setImmediate(function() {
+    console.log("[*] Attached to FirstApp process via Gadget");
+    dumpMemory();
+});
