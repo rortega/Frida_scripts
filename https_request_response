@@ -1,0 +1,151 @@
+function formatHeaders(headers) {
+    if (!headers) return "None";
+    let result = "";
+    for (let key in headers) {
+        if (Object.prototype.hasOwnProperty.call(headers, key)) {
+            result += `${key}: ${headers[key]}\n`;
+        }
+    }
+    return result.trim() || "None";
+}
+
+// Android: Hook Java HTTP APIs
+function hookAndroid() {
+    Java.perform(function () {
+        console.log("[*] Hooking Android HTTP APIs...");
+
+        // Hook HttpURLConnection
+        let HttpURLConnection = Java.use("java.net.HttpURLConnection");
+        HttpURLConnection.connect.implementation = function () {
+            let url = this.getURL().toString();
+            let method = this.getRequestMethod();
+            let headers = this.getRequestProperties();
+            console.log(`[Android Request] URL: ${url}`);
+            console.log(`[Android Request] Method: ${method}`);
+            console.log(`[Android Request] Headers:\n${formatHeaders(headers)}`);
+            try {
+                let inputStream = this.getInputStream();
+                if (inputStream) {
+                    let InputStreamReader = Java.use("java.io.InputStreamReader");
+                    let reader = InputStreamReader.$new(inputStream, "UTF-8");
+                    let responseBody = reader.readLine();
+                    console.log(`[Android Response] Body: ${responseBody || "Empty"}`);
+                }
+            } catch (e) {
+                console.log(`[Android Response] Error reading body: ${e}`);
+            }
+            let statusCode = this.getResponseCode();
+            console.log(`[Android Response] Status: ${statusCode}`);
+            return this.connect.apply(this, arguments);
+        };
+
+        // Hook OkHttpClient
+        try {
+            let OkHttpClient = Java.use("okhttp3.OkHttpClient");
+            let Request = Java.use("okhttp3.Request");
+            let Response = Java.use("okhttp3.Response");
+
+            OkHttpClient.newCall.implementation = function (request) {
+                let url = request.url().toString();
+                let method = request.method();
+                let headers = request.headers().toString();
+                let body = request.body() ? request.body().toString() : "None";
+                console.log(`[OkHttp Request] URL: ${url}`);
+                console.log(`[OkHttp Request] Method: ${method}`);
+                console.log(`[OkHttp Request] Headers:\n${headers}`);
+                console.log(`[OkHttp Request] Body: ${body}`);
+
+                let call = this.newCall.apply(this, arguments);
+                let proceed = call.execute;
+
+                call.execute.implementation = function () {
+                    let response = proceed.apply(this, arguments);
+                    let statusCode = response.code();
+                    let responseHeaders = response.headers().toString();
+                    let responseBody = response.body() ? response.body().string() : "Empty";
+                    console.log(`[OkHttp Response] Status: ${statusCode}`);
+                    console.log(`[OkHttp Response] Headers:\n${responseHeaders}`);
+                    console.log(`[OkHttp Response] Body: ${responseBody}`);
+                    return response;
+                };
+
+                return call;
+            };
+        } catch (e) {
+            console.log(`[Android] OkHttp not found: ${e}`);
+        }
+    });
+}
+
+// iOS: Hook Objective-C HTTP APIs
+function hookIOS() {
+    console.log("[*] Hooking iOS HTTP APIs...");
+
+    // Hook NSURLSession
+    let NSURLSession = ObjC.classes.NSURLSession;
+    Interceptor.attach(NSURLSession["- dataTaskWithRequest:completionHandler:"].implementation, {
+        onEnter: function (args) {
+            let request = ObjC.Object(args[2]);
+            let url = request.URL().toString();
+            let method = request.HTTPMethod().toString();
+            let headers = request.allHTTPHeaderFields();
+            let body = request.HTTPBody() ? request.HTTPBody().toString() : "None";
+            console.log(`[iOS Request] URL: ${url}`);
+            console.log(`[iOS Request] Method: ${method}`);
+            console.log(`[iOS Request] Headers:\n${formatHeaders(headers)}`);
+            console.log(`[iOS Request] Body: ${body}`);
+        }
+    });
+
+    // Hook NSURLConnection
+    try {
+        let NSURLConnection = ObjC.classes.NSURLConnection;
+        Interceptor.attach(NSURLConnection["- sendSynchronousRequest:returningResponse:error:"].implementation, {
+            onEnter: function (args) {
+                let request = ObjC.Object(args[2]);
+                let url = request.URL().toString();
+                let method = request.HTTPMethod().toString();
+                let headers = request.allHTTPHeaderFields();
+                console.log(`[iOS Request] URL: ${url}`);
+                console.log(`[iOS Request] Method: ${method}`);
+                console.log(`[iOS Request] Headers:\n${formatHeaders(headers)}`);
+            },
+            onLeave: function (retval) {
+                let response = ObjC.Object(retval[1]);
+                if (response) {
+                    let statusCode = response.statusCode();
+                    let headers = response.allHeaderFields();
+                    console.log(`[iOS Response] Status: ${statusCode}`);
+                    console.log(`[iOS Response] Headers:\n${formatHeaders(headers)}`);
+                }
+            }
+        });
+    } catch (e) {
+        console.log(`[iOS] NSURLConnection not found: ${e}`);
+    }
+}
+
+// Main function to hook HTTP/HTTPS
+function hookHttp() {
+    console.log("[*] Detecting platform...");
+    if (Process.platform === "linux" || Process.platform === "android") {
+        hookAndroid();
+    } else if (Process.platform === "darwin") {
+        hookIOS();
+    } else {
+        console.log("[ERROR] Unsupported platform: " + Process.platform);
+    }
+}
+
+// RPC export for dynamic triggering
+rpc.exports = {
+    hookhttp: function () {
+        hookHttp();
+    }
+};
+
+// Run automatically
+setImmediate(function () {
+    console.log("[*] Attached to FirstApp process via Gadget");
+    hookHttp();
+});
