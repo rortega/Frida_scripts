@@ -1,0 +1,610 @@
+----------------------------------------------------------
+1. Root Detection Bypass or Weaknesses
+----------------------------------------------------------
+
+Description: Many apps implement root detection to prevent running on rooted devices, but weak or bypassable checks can allow attackers to run the app in insecure environments.
+
+Why Check: Bypassing root detection indicates the app’s security measures are ineffective, exposing it to tampering or debugging.
+
+Frida Check:
+Hook common root detection methods (e.g., checking for su, Superuser.apk, or Build.TAGS).
+
+Log or bypass the detection logic to test its robustness.
+
+Sample Script:
+javascript
++++++++++++++++++++++++++++++++++++
+Java.perform(function () {
+    console.log("[*] Checking for root detection...");
+    let Runtime = Java.use("java.lang.Runtime");
+    Runtime.exec.overload("java.lang.String").implementation = function (cmd) {
+        console.log(`[Root Detection] Exec: ${cmd}`);
+        if (cmd.includes("su") || cmd.includes("which")) {
+            console.log("[!] Root detection attempt detected");
+            return null; // Simulate no root
+        }
+        return this.exec(cmd);
+    });
+
+    let Build = Java.use("android.os.Build");
+    Build.TAGS.get.implementation = function () {
+        console.log("[Root Detection] Build.TAGS checked");
+        return "release-keys"; // Spoof non-rooted device
+    });
+});
++++++++++++++++++++++++++++++++++++
+
+Vulnerability Indicators:
+Detection methods are easily bypassed (e.g., returning null for su checks).
+
+Hardcoded checks for files like /system/app/Superuser.apk.
+
+----------------------------------------------------------
+2. Debuggable Flag Check
+----------------------------------------------------------
+
+Description: Apps with android:debuggable="true" in the manifest are vulnerable to debugging, allowing attackers to attach debuggers or inspect runtime behavior.
+
+Why Check: Debuggable apps expose sensitive data and logic, increasing the risk of reverse engineering.
+
+Frida Check:
+Inspect the app’s ApplicationInfo to check the FLAG_DEBUGGABLE status.
+
+Sample Script:
+javascript
+
++++++++++++++++++++++++++++++++++++
+Java.perform(function () {
+    let ApplicationInfo = Java.use("android.content.pm.ApplicationInfo");
+    let context = Java.use("android.app.ActivityThread").currentApplication().getApplicationContext();
+    letSynchronous(function () {
+        let packageManager = context.getPackageManager();
+        let packageName = context.getPackageName();
+        let appInfo = packageManager.getApplicationInfo(packageName, 0);
+        if ((appInfo.flags.value & ApplicationInfo.FLAG_DEBUGGABLE.value) !== 0) {
+            console.log("[!] App is debuggable - Vulnerable to debugging");
+        } else {
+            console.log("[*] App is not debuggable");
+        }
+    });
+});
++++++++++++++++++++++++++++++++++++
+Vulnerability Indicators:
+FLAG_DEBUGGABLE is set, indicating a misconfiguration.
+
+----------------------------------------------------------
+3. Insecure Data Storage
+----------------------------------------------------------
+
+Description: Apps storing sensitive data (e.g., API keys, tokens, passwords) in plaintext in SharedPreferences, files, or logs are vulnerable to extraction.
+
+Why Check: Attackers can access stored data on rooted devices or via backup vulnerabilities.
+
+Frida Check:
+Hook SharedPreferences, FileOutputStream, or Log methods to detect sensitive data.
+
+Sample Script:
+javascript
+
++++++++++++++++++++++++++++++++++++
+Java.perform(function () {
+    try {
+        console.log("[*] Script started");
+
+        // Anti-tampering bypass
+        try {
+            var System = Java.use("java.lang.System");
+            System.loadLibrary.overload("java.lang.String").implementation = function (libName) {
+                if (libName === "frida-gadget") {
+                    console.log("[*] Skipping frida-gadget detection");
+                    return;
+                }
+                return this.loadLibrary(libName);
+            };
+            var Runtime = Java.use("java.lang.Runtime");
+            Runtime.exec.overload("java.lang.String").implementation = function (cmd) {
+                if (cmd.includes("frida")) {
+                    console.log("[*] Bypassing Runtime.exec: " + cmd);
+                    throw new Java.use("java.io.IOException").$new("Command not found");
+                }
+                return this.exec(cmd);
+            };
+            console.log("[*] Anti-tampering bypass applied");
+        } catch (e) {
+            console.log("[*] Error setting up anti-tampering bypass: " + e);
+        }
+
+        // Function to hook SharedPreferences and Log
+        function hookSensitiveData() {
+            // Hook SharedPreferences$Editor.putString
+            try {
+                let SharedPreferencesEditor = Java.use("android.content.SharedPreferences$Editor");
+                console.log("[*] SharedPreferences$Editor class found");
+
+                // Verify putString method exists
+                if (typeof SharedPreferencesEditor.putString === "function") {
+                    SharedPreferencesEditor.putString.implementation = function (key, value) {
+                        console.log(`[SharedPreferences] Storing: ${key} = ${value}`);
+                        if (key.toLowerCase().includes("password") || key.toLowerCase().includes("token")) {
+                            console.log("[!] Sensitive data stored in SharedPreferences");
+                        }
+                        return this.putString(key, value);
+                    };
+                    console.log("[*] Hooked SharedPreferences$Editor.putString");
+                } else {
+                    console.log("[!] Error: putString method not found on SharedPreferences$Editor");
+                }
+            } catch (e) {
+                console.log("[*] Error hooking SharedPreferences$Editor: " + e);
+            }
+
+            // Hook Log.d
+            try {
+                let Log = Java.use("android.util.Log");
+                console.log("[*] Log class found");
+
+                // Hook Log.d(String, String)
+                Log.d.overload("java.lang.String", "java.lang.String").implementation = function (tag, msg) {
+                    console.log(`[Log] ${tag}: ${msg}`);
+                    if (msg.toLowerCase().includes("key") || msg.toLowerCase().includes("secret")) {
+                        console.log("[!] Sensitive data in logs");
+                    }
+                    return this.d(tag, msg);
+                };
+                console.log("[*] Hooked Log.d");
+            } catch (e) {
+                console.log("[*] Error hooking Log.d: " + e);
+            }
+        }
+
+        // Execute hooking immediately
+        hookSensitiveData();
+
+        // Expose to REPL
+        rpc.exports = {
+            hooksensitivedata: function () {
+                try {
+                    console.log("[*] Executing hooksensitivedata via rpc.exports");
+                    hookSensitiveData();
+                    return "[*] Sensitive data hooking completed.";
+                } catch (e) {
+                    console.log("[*] Error in hooksensitivedata: " + e);
+                    return "[*] Error: " + e.message;
+                }
+            }
+        };
+
+        // Global function
+        global.hookSensitiveData = function () {
+            try {
+                console.log("[*] Executing hookSensitiveData via global function");
+                if (rpc.exports.hooksensitivedata) {
+                    return rpc.exports.hooksensitivedata();
+                } else {
+                    console.log("[*] Error: rpc.exports.hooksensitivedata not defined");
+                    hookSensitiveData();
+                    return "[*] Executed hookSensitiveData directly";
+                }
+            } catch (e) {
+                console.log("[*] Error in global hookSensitiveData: " + e);
+                return "[*] Error: " + e.message;
+            }
+        };
+
+        // Debugging
+        console.log("[*] Script loaded successfully.");
+        console.log("[*] rpc.exports.hooksensitivedata: " + (typeof rpc.exports.hooksensitivedata));
+        console.log("[*] global.hookSensitiveData: " + (typeof global.hookSensitiveData));
+        console.log("[*] Use 'rpc.exports.hooksensitivedata()' or 'hookSensitiveData()' in the REPL.");
+    } catch (e) {
+        console.log("[*] Error initializing script: " + e);
+    }
+});
++++++++++++++++++++++++++++++++++++
+
+Vulnerability Indicators:
+Sensitive data (e.g., “token”, “password”) in SharedPreferences or logs.
+
+Unencrypted file writes with sensitive data.
+
+----------------------------------------------------------
+4. SSL/TLS Misconfigurations
+----------------------------------------------------------
+Description: Apps that bypass SSL certificate validation or use weak trust managers are vulnerable to man-in-the-middle (MITM) attacks.
+
+Why Check: Insecure HTTPS handling exposes network traffic to interception.
+
+Frida Check:
+Hook TrustManager or HostnameVerifier implementations to detect custom or weak validation.
+
+Sample Script:
+javascript
+
++++++++++++++++++++++++++++++++++++
+Java.perform(function () {
+    let X509TrustManager = Java.use("javax.net.ssl.X509TrustManager");
+    X509TrustManager.checkServerTrusted.overload("[Ljava.security.cert.X509Certificate;", "java.lang.String").implementation = function (chain, authType) {
+        console.log("[!] Bypassing SSL checkServerTrusted");
+        return; // Simulate bypass
+    });
+
+    let HostnameVerifier = Java.use("javax.net.ssl.HostnameVerifier");
+    HostnameVerifier.verify.overload("java.lang.String", "javax.net.ssl.SSLSession").implementation = function (hostname, session) {
+        console.log(`[!] Bypassing hostname verification for ${hostname}`);
+        return true; // Simulate bypass
+    });
+});
++++++++++++++++++++++++++++++++++++
+
+Vulnerability Indicators:
+Empty or trivial checkServerTrusted implementations.
+
+verify always returns true.
+
+----------------------------------------------------------
+5. Insecure Network Communication
+----------------------------------------------------------
+
+Description: Apps using HTTP instead of HTTPS or allowing cleartext traffic are vulnerable to interception.
+
+Why Check: Cleartext traffic exposes sensitive data to network sniffing.
+
+Frida Check:
+Hook HttpURLConnection or OkHttpClient to detect HTTP URLs.
+
+Sample Script:
+javascript
+
++++++++++++++++++++++++++++++++++++
+Java.perform(function () {
+    let HttpURLConnection = Java.use("java.net.HttpURLConnection");
+    HttpURLConnection.connect.implementation = function () {
+        let url = this.getURL().toString();
+        if (url.startsWith("http://")) {
+            console.log(`[!] Insecure HTTP request: ${url}`);
+        } else {
+            console.log(`[HTTPS Request] ${url}`);
+        }
+        return this.connect.apply(this, arguments);
+    });
+});
++++++++++++++++++++++++++++++++++++
+Vulnerability Indicators:
+Requests starting with http://.
+
+Manifest allows cleartext traffic (android:usesCleartextTraffic="true").
+
+----------------------------------------------------------
+6. Component Exposure
+----------------------------------------------------------
+
+Description: Exported activities, services, or receivers can be accessed by other apps, leading to data leaks or unauthorized actions.
+
+Why Check: Exposed components can be invoked maliciously.
+
+Frida Check:
+Inspect PackageManager to check for exported components.
+
+Sample Script:
+javascript
+
+Java.perform(function () {
+    let context = Java.use("android.app.ActivityThread").currentApplication().getApplicationContext();
+    let packageManager = context.getPackageManager();
+    let packageName = context.getPackageName();
+    let activities = packageManager.getPackageInfo(packageName, 1).activities.value;
+    for (let i = 0; i < activities.length; i++) {
+        if (activities[i].exported.value) {
+            console.log(`[!] Exported Activity: ${activities[i].name.value}`);
+        }
+    }
+});
+
+Vulnerability Indicators:
+Activities, services, or receivers with exported=true.
+
+----------------------------------------------------------
+7. Intent-Based Vulnerabilities
+----------------------------------------------------------
+Description: Improper handling of Intents can allow malicious apps to inject data or trigger unintended actions.
+
+Why Check: Exposed Intent handlers can lead to data leaks or denial-of-service.
+
+Frida Check:
+Hook startActivity or sendBroadcast to monitor Intent data.
+
+Sample Script:
+javascript
+
++++++++++++++++++++++++++++++++++++
+Java.perform(function () {
+    let Activity = Java.use("android.app.Activity");
+    Activity.startActivity.overload("android.content.Intent").implementation = function (intent) {
+        let action = intent.getAction();
+        let data = intent.getDataString();
+        console.log(`[Intent] Action: ${action}, Data: ${data || "None"}`);
+        if (data && data.includes("file://")) {
+            console.log("[!] Potential file exposure via Intent");
+        }
+        return this.startActivity(intent);
+    });
+});
++++++++++++++++++++++++++++++++++++
+
+Vulnerability Indicators:
+Intents exposing sensitive URIs (e.g., file://).
+
+Lack of validation on Intent extras.
+
+----------------------------------------------------------
+8. WebView Misconfigurations
+----------------------------------------------------------
+Description: WebViews with enabled JavaScript, file access, or universal access can lead to XSS or data leaks.
+
+Why Check: Insecure WebViews can execute malicious scripts or access local files.
+
+Frida Check:
+Hook WebSettings to check for risky settings.
+
+Sample Script:
+javascript
+
++++++++++++++++++++++++++++++++++++
+// Frida script to detect insecure WebView configurations in FirstApp
+Java.perform(function () {
+    var WebSettings = Java.use("android.webkit.WebSettings");
+    WebSettings.setJavaScriptEnabled.implementation = function (enabled) {
+        if (enabled) {
+            console.log("[!] WebView JavaScript enabled - Potential XSS risk");
+        }
+        return this.setJavaScriptEnabled(enabled);
+    };
+    WebSettings.setAllowFileAccess.implementation = function (allow) {
+        if (allow) {
+            console.log("[!] WebView file access enabled - Potential file exposure");
+        }
+        return this.setAllowFileAccess(allow);
+    };
+});
++++++++++++++++++++++++++++++++++++
+
+
+Vulnerability Indicators:
+setJavaScriptEnabled(true).
+
+setAllowFileAccess(true) or setAllowUniversalAccessFromFileURLs(true).
+
+
+----------------------------------------------------------
+9. Hardcoded Secrets
+----------------------------------------------------------
+
+Description: API keys, passwords, or tokens hardcoded in the app’s code or resources can be extracted.
+
+Why Check: Hardcoded secrets are easily reverse-engineered.
+
+Frida Check:
+Scan strings in memory or hook string operations to detect secrets.
+
+Sample Script:
+javascript
+
+// Frida script to detect hardcoded secrets in FirstApp
+Java.perform(function () {
+    var String = Java.use("java.lang.String");
+    String.toString.implementation = function () {
+        var value = this.valueOf(); // Use valueOf to avoid recursive toString
+        if (value.includes("API_KEY") || value.includes("Bearer ") || value.includes("password")) {
+            console.log('[!] Potential hardcoded secret: ${value}');
+        }
+        return value;
+    };
+});
+
+Vulnerability Indicators:
+Strings containing “key”, “secret”, “token”, or “password”.
+
+----------------------------------------------------------
+10. Runtime Code Injection
+----------------------------------------------------------
+
+Description: Apps allowing dynamic code loading (e.g., via dexClassLoader) are vulnerable to code injection.
+
+Why Check: Malicious code can be loaded at runtime.
+
+Frida Check:
+Hook DexClassLoader or loadClass methods.
+
+Sample Script:
+javascript
++++++++++++++++++++++++++++++++++++
+
+Java.perform(function () {
+    let DexClassLoader = Java.use("dalvik.system.DexClassLoader");
+    DexClassLoader.$init.overload("java.lang.String", "java.lang.String", "java.lang.String", "java.lang.ClassLoader").implementation = function (dexPath, optimizedDir, libraryPath, parent) {
+        console.log(`[!] Dynamic code loading detected: ${dexPath}`);
+        return this.$init(dexPath, optimizedDir, libraryPath, parent);
+    });
+});
++++++++++++++++++++++++++++++++++++
+
+Vulnerability Indicators:
+Use of DexClassLoader with external or writable paths.
+
+
+----------------------------------------------------------
+11. Native Code Vulnerabilities
+----------------------------------------------------------
+
+Description: Native libraries (JNI/C++) may have buffer overflows or insecure function calls.
+
+Why Check: Native code vulnerabilities can lead to app compromise.
+
+Frida Check:
+Hook native functions like strcpy, memcpy, or custom JNI methods.
+
+Sample Script:
+javascript
+
++++++++++++++++++++++++++++++++++++
+Interceptor.attach(Module.getExportByName(null, "strcpy"), {
+    onEnter: function (args) {
+        console.log(`[!] Insecure strcpy called: dest=${args[0]}, src=${args[1].readUtf8String()}`);
+    }
+});
++++++++++++++++++++++++++++++++++++
+Vulnerability Indicators:
+Use of unsafe functions (strcpy, strcat).
+
+Large memcpy buffers without bounds checking.
+
+----------------------------------------------------------
+12. Backup Vulnerabilities
+----------------------------------------------------------
+
+Description: Apps with android:allowBackup="true" are vulnerable to data extraction via ADB backups.
+
+Why Check: Sensitive data can be extracted without root.
+
+Frida Check:
+Check the manifest’s backup flag programmatically.
+
+Sample Script:
+javascript
+
++++++++++++++++++++++++++++++++++++
+Java.perform(function () {
+    let context = Java.use("android.app.ActivityThread").currentApplication().getApplicationContext();
+    let packageManager = context.getPackageManager();
+    let packageName = context.getPackageName();
+    let appInfo = packageManager.getApplicationInfo(packageName, 0);
+    if ((appInfo.flags.value & 0x80) !== 0) { // FLAG_ALLOW_BACKUP
+        console.log("[!] App allows backup - Vulnerable to data extraction");
+    } else {
+        console.log("[*] App does not allow backup");
+    }
+});
++++++++++++++++++++++++++++++++++++
+
+Vulnerability Indicators:
+FLAG_ALLOW_BACKUP is set.
+
+How to Use with Frida Gadget
+Since you’re using frida -U Gadget with FirstApp, here’s how to implement these checks:
+1. Combine Checks into a Single Script
+Create a script (e.g., security_checks.js) combining relevant checks:
+javascript
+
+Java.perform(function () {
+    console.log("[*] Starting security checks for FirstApp...");
+
+    // Debuggable check
+    let ApplicationInfo = Java.use("android.content.pm.ApplicationInfo");
+    let context = Java.use("android.app.ActivityThread").currentApplication().getApplicationContext();
+    let packageManager = context.getPackageManager();
+    let packageName = context.getPackageName();
+    let appInfo = packageManager.getApplicationInfo(packageName, 0);
+    if ((appInfo.flags.value & ApplicationInfo.FLAG_DEBUGGABLE.value) !== 0) {
+        console.log("[!] App is debuggable - Vulnerable to debugging");
+    }
+
+    // Root detection
+    let Runtime = Java.use("java.lang.Runtime");
+    Runtime.exec.overload("java.lang.String").implementation = function (cmd) {
+        if (cmd.includes("su")) {
+            console.log("[!] Root detection attempt: ${cmd}");
+        }
+        return this.exec(cmd);
+    });
+
+    // Insecure HTTP
+    let HttpURLConnection = Java.use("java.net.HttpURLConnection");
+    HttpURLConnection.connect.implementation = function () {
+        let url = this.getURL().toString();
+        if (url.startsWith("http://")) {
+            console.log(`[!] Insecure HTTP request: ${url}`);
+        }
+        return this.connect.apply(this, arguments);
+    });
+
+    // Add more checks here...
+});
+
+2. Embed in Frida Gadget
+Save Script: Save as security_checks.js.
+
+Configure Gadget:
+Android:
+Ensure libgadget.so is injected into FirstApp’s APK.
+
+Add to assets/gadget.config:
+json
+
+{
+  "interaction": {
+    "type": "script",
+    "path": "security_checks.js"
+  }
+}
+
+Copy security_checks.js to assets/.
+
+Rebuild, sign, and install the APK.
+
+Run:
+Launch FirstApp.
+
+Attach:
+bash
+
+frida -U Gadget
+
+3. Dynamic Loading (Alternative)
+Add RPC export:
+javascript
+
+rpc.exports = {
+    runchecks: function () {
+        Java.perform(function () {
+            // Add checks here
+            console.log("[*] Running security checks...");
+        });
+    }
+};
+
+Load and run:
+bash
+
+frida -U Gadget -l security_checks.js
+
+javascript
+
+rpc.runchecks()
+
+4. Analyze Output
+Monitor console output for [!] warnings indicating vulnerabilities.
+
+Example:
+
+[*] Starting security checks for FirstApp...
+[!] App is debuggable - Vulnerable to debugging
+[!] Insecure HTTP request: http://api.example.com/data
+[!] Root detection attempt: which su
+
+Tips for Effective Security Testing
+Trigger App Functionality: Interact with FirstApp (e.g., login, send requests) to trigger code paths that reveal vulnerabilities.
+
+Target Specific Modules: Use Process.enumerateModules() to focus on app-specific libraries (e.g., libFirstApp.so).
+
+Combine with Static Analysis: Use tools like apktool or MobSF to complement Frida’s dynamic analysis.
+
+Log to File: Redirect output to a file for easier analysis:
+javascript
+
+let File = Java.use("java.io.File");
+let FileOutputStream = Java.use("java.io.FileOutputStream");
+let fos = FileOutputStream.$new(File.$new("/sdcard/security_log.txt"));
+console.setOutput(function (str) {
+    fos.write(Java.use("java.lang.String").$new(str).getBytes());
+});
+
