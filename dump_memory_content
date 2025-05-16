@@ -1,6 +1,3 @@
-// Frida script to dump raw memory content of FirstApp (Gadget-injected)
-
-// Helper function to format bytes as hex and ASCII
 function formatMemory(address, bytes, length) {
     let hex = '';
     let ascii = '';
@@ -13,6 +10,17 @@ function formatMemory(address, bytes, length) {
         }
     }
     return `${address}: ${hex.padEnd(55)}| ${ascii}`;
+}
+
+function isByteArrayEmptyOrZero(byteArray) {
+    // Check if empty
+    if (byteArray.length === 0) {
+        return true;
+    }
+    // Check if all elements are zero
+    return byteArray.every(function (byte) {
+        return byte === 0;
+    });
 }
 
 // Function to dump memory content
@@ -38,8 +46,11 @@ function dumpMemory() {
                     let bytes = address.readByteArray(sizeToRead);
                     let byteArray = new Uint8Array(bytes);
 
-                    // Format and print
-                    console.log(formatMemory(address, byteArray, sizeToRead));
+                  if (isByteArrayEmptyOrZero(byteArray)){
+                    //nothing to display
+                 }else{
+                     console.log(formatMemory(address, byteArray, sizeToRead));
+                }
                 } catch (e) {
                     console.log(`[ERROR] Failed to read at ${address}: ${e}`);
                 }
