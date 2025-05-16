@@ -9,7 +9,8 @@ function formatMemory(address, bytes, length) {
             hex += '  ';
         }
     }
-    return `${address}: ${hex.padEnd(55)}| ${ascii}`;
+    //return `${address}: ${hex.padEnd(55)}| ${ascii}`; 
+   return `${address}: ${ascii}`; //ignore hex, only display strings
 }
 
 function isByteArrayEmptyOrZero(byteArray) {
