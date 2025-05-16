@@ -54,7 +54,7 @@ function dumpMemory() {
 
                    var value = formatMemory(address, byteArray, sizeToRead);
                    // Match 3-9 digits, ensuring no longer sequences
-                   var regex = /\b\d{6,9}\b/g;
+                   var regex = /\b\d{6}\b/g;
                    var matches = value.match(regex);
                    if (matches) {
                      matches.forEach(function (match) {
@@ -64,9 +64,7 @@ function dumpMemory() {
  
 
 
-                 
-
-
+                
 
                 }
                 } catch (e) {
