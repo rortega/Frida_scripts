@@ -287,7 +287,7 @@ Inspect PackageManager to check for exported components.
 
 Sample Script:
 javascript
-
++++++++++++++++++++++++++++++++++++
 Java.perform(function () {
     let context = Java.use("android.app.ActivityThread").currentApplication().getApplicationContext();
     let packageManager = context.getPackageManager();
@@ -299,7 +299,7 @@ Java.perform(function () {
         }
     }
 });
-
++++++++++++++++++++++++++++++++++++
 Vulnerability Indicators:
 Activities, services, or receivers with exported=true.
 
