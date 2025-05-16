@@ -26,7 +26,7 @@ function isByteArrayEmptyOrZero(byteArray) {
 
 // Function to dump memory content
 function dumpMemory() {
-    console.log("[*] Starting memory dump for FirstApp...");
+    console.log("[*] Starting memory dump...");
 
     // Enumerate readable memory ranges
     let ranges = Process.enumerateRanges('r--');
@@ -54,11 +54,11 @@ function dumpMemory() {
 
                    var value = formatMemory(address, byteArray, sizeToRead);
                    // Match 3-9 digits, ensuring no longer sequences
-                   var regex = /\b\d{3,9}\b/g;
+                   var regex = /\b\d{6,9}\b/g;
                    var matches = value.match(regex);
                    if (matches) {
                      matches.forEach(function (match) {
-                    console.log("[*] Found sequence: ${address} - " + match + " in string: " + value);
+                    console.log(address + " : " + value);
                  });
               }
  
