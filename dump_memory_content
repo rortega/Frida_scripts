@@ -10,7 +10,7 @@ function formatMemory(address, bytes, length) {
         }
     }
     //return `${address}: ${hex.padEnd(55)}| ${ascii}`; 
-   return `${address}: ${ascii}`; //ignore hex, only display strings
+   return `${ascii}`; //ignore hex, only display strings
 }
 
 function isByteArrayEmptyOrZero(byteArray) {
@@ -50,7 +50,24 @@ function dumpMemory() {
                   if (isByteArrayEmptyOrZero(byteArray)){
                     //nothing to display
                  }else{
-                     console.log(formatMemory(address, byteArray, sizeToRead));
+
+
+                   var value = formatMemory(address, byteArray, sizeToRead);
+                   // Match 3-9 digits, ensuring no longer sequences
+                   var regex = /\b\d{3,9}\b/g;
+                   var matches = value.match(regex);
+                   if (matches) {
+                     matches.forEach(function (match) {
+                    console.log("[*] Found sequence: ${address} - " + match + " in string: " + value);
+                 });
+              }
+ 
+
+
+                 
+
+
+
                 }
                 } catch (e) {
                     console.log(`[ERROR] Failed to read at ${address}: ${e}`);
