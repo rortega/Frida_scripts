@@ -36,9 +36,19 @@ Java.perform(function () {
                             console.log(logMsg);
 
 
+                             var result = this[methodName].apply(this, arguments);
+
+                            // Log return value
+                            var returnLog = "Method " + className + "." + methodName + " returned: " + 
+                                            (result == null ? "null" : result.toString());
+                            console.log(returnLog);
+                        
+
+
         
                         // Call the original method and return its result
-                        return this[methodName].apply(this, arguments);
+                        //return this[methodName].apply(this, arguments);
+                        return result;
                     };
                 } catch (e) {
                     console.log("  Failed to hook " + methodName + ": " + e.message);
