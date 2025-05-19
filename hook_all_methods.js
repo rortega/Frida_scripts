@@ -24,7 +24,19 @@ Java.perform(function () {
                 // Hook the method
                 try {
                     clazz[methodName].implementation = function () {
-                        console.log("Method " + className + "." + methodName + " called");
+
+
+
+                           var logMsg = "Method " + className + "." + methodName + "(";
+                            for (var i = 0; i < arguments.length; i++) {
+                                logMsg += "arg" + i + "=" + (arguments[i] == null ? "null" : arguments[i].toString());
+                                if (i < arguments.length - 1) logMsg += ", ";
+                            }
+                            logMsg += ") called";
+                            console.log(logMsg);
+
+
+        
                         // Call the original method and return its result
                         return this[methodName].apply(this, arguments);
                     };
