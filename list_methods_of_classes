@@ -1,0 +1,28 @@
+Java.perform(function () {
+    try {
+        // Replace with your target class
+        var className = "com.firstapp.utils.TextProcessor";
+        var clazz = Java.use(className);
+        
+        // Verify class is loaded
+        if (!clazz || !clazz.class) {
+            console.log("Error: Class " + className + " not found or not loaded.");
+            return;
+        }
+
+        // Get declared methods using reflection
+        var methods = clazz.class.getDeclaredMethods();
+        console.log("Methods of " + className + ":");
+        
+        if (methods.length === 0) {
+            console.log("  No methods found.");
+        } else {
+            methods.forEach(function (method) {
+                console.log("  " + method.toString());
+            });
+        }
+    } catch (e) {
+        console.log("Error: " + e.message);
+    }
+    console.log("Enumeration complete.");
+});
