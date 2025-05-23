@@ -1,0 +1,79 @@
+Java.perform(function () {
+    console.log("[*] Starting HTTPS class and method enumeration...");
+
+    // Common classes involved in HTTPS requests/responses
+    const classesToHook = [
+        "java.net.HttpURLConnection",
+        "javax.net.ssl.HttpsURLConnection",
+        "okhttp3.OkHttpClient",
+        "okhttp3.Request",
+        "okhttp3.Response",
+        "retrofit2.Retrofit",
+        "com.android.volley.Request",
+        "com.android.volley.Response"
+    ];
+
+    // Iterate through classes to check if they are loaded
+    classesToHook.forEach(function (className) {
+        try {
+            const targetClass = Java.use(className);
+            console.log("[+] Found class: " + className);
+
+            // Enumerate methods of the class
+            const methods = targetClass.class.getDeclaredMethods();
+            methods.forEach(function (method) {
+                const methodName = method.getName();
+                console.log("  [-] Method: " + methodName);
+
+                // Hook the method to log calls
+                try {
+                    targetClass[methodName].implementation = function () {
+                        console.log("[*] Called: " + className + "." + methodName);
+                        // Log arguments if any
+                        for (let i = 0; i < arguments.length; i++) {
+                            console.log("  [-] Arg[" + i + "]: " + arguments[i]);
+                        }
+                        // Call the original method and log the result
+                        const result = this[methodName].apply(this, arguments);
+                        console.log("  [-] Result: " + result);
+                        return result;
+                    };
+                } catch (e) {
+                    console.log("  [!] Failed to hook method: " + methodName + " - Error: " + e.message);
+                }
+            });
+        } catch (e) {
+            console.log("[!] Class not found or cannot be hooked: " + className + " - Error: " + e.message);
+        }
+    });
+
+    // Hook SSLContext to capture TLS-related initialization
+    try {
+        const SSLContext = Java.use("javax.net.ssl.SSLContext");
+        SSLContext.init.implementation = function (keyManager, trustManager, secureRandom) {
+            console.log("[*] SSLContext.init called");
+            console.log("  [-] KeyManager: " + keyManager);
+            console.log("  [-] TrustManager: " + trustManager);
+            console.log("  [-] SecureRandom: " + secureRandom);
+            return this.init.apply(this, arguments);
+        };
+    } catch (e) {
+        console.log("[!] Failed to hook SSLContext.init: " + e.message);
+    }
+
+    // Hook OkHttpClient's newCall method for request details
+    try {
+        const OkHttpClient = Java.use("okhttp3.OkHttpClient");
+        OkHttpClient.newCall.implementation = function (request) {
+            console.log("[*] OkHttpClient.newCall called");
+            console.log("  [-] Request URL: " + request.url());
+            console.log("  [-] Request Method: " + request.method());
+            console.log("  [-] Request Headers: " + request.headers());
+            return this.newCall.apply(this, arguments);
+        };
+    } catch (e) {
+        console.log("[!] Failed to hook OkHttpClient.newCall: " + e.message);
+    }
+
+    console.log("[*] HTTPS class and method hooks set up successfully.");
+});
