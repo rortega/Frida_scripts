@@ -1,0 +1,88 @@
+Java.perform(function () {
+    console.log("[*] Starting OkHttpClient request/response capture...");
+
+    try {
+        // Hook OkHttpClient
+        const OkHttpClient = Java.use("okhttp3.OkHttpClient");
+        const Request = Java.use("okhttp3.Request");
+        const Response = Java.use("okhttp3.Response");
+        const Headers = Java.use("okhttp3.Headers");
+
+        // Hook the newCall method
+        OkHttpClient.newCall.implementation = function (request) {
+            console.log("\n=== HTTP Request ===");
+            // Log request details
+            console.log("URL: " + request.url().toString());
+            console.log("Method: " + request.method().toString());
+
+            // Log request headers
+            const requestHeaders = request.headers().toString();
+            console.log("Headers:");
+            console.log(formatHeaders(requestHeaders));
+
+            // Log request body (if present)
+            const requestBody = request.body();
+            if (requestBody !== null) {
+                try {
+                    const buffer = Java.use("okio.Buffer").$new();
+                    requestBody.writeTo(buffer);
+                    console.log("Body: " + buffer.readUtf8());
+                } catch (e) {
+                    console.log("Body: [Unable to read - " + e.message + "]");
+                }
+            } else {
+                console.log("Body: [None]");
+            }
+
+            // Call the original newCall method
+            const call = this.newCall(request);
+            const response = call.execute();
+
+            // Log response details
+            console.log("\n=== HTTP Response ===");
+            console.log("Status: " + response.code() + " " + response.message());
+            console.log("Protocol: " + response.protocol().toString());
+
+            // Log response headers
+            const responseHeaders = response.headers().toString();
+            console.log("Headers:");
+            console.log(formatHeaders(responseHeaders));
+
+            // Log response body (if present)
+            const responseBody = response.body();
+            if (responseBody !== null) {
+                try {
+                    const bodyString = responseBody.string();
+                    console.log("Body: " + bodyString);
+                    // Reconstruct response body to avoid consuming it
+                    const newBody = Java.use("okhttp3.ResponseBody").create(responseBody.contentType(), bodyString);
+                    response.body = function () { return newBody; };
+                } catch (e) {
+                    console.log("Body: [Unable to read - " + e.message + "]");
+                }
+            } else {
+                console.log("Body: [None]");
+            }
+
+            console.log("==================\n");
+            return response;
+        };
+
+        console.log("[*] OkHttpClient.newCall hooked successfully.");
+    } catch (e) {
+        console.log("[!] Failed to hook OkHttpClient.newCall: " + e.message);
+    }
+
+    // Helper function to format headers like Burp Suite
+    function formatHeaders(headers) {
+        // Headers are returned as a string, split into lines
+        const headerLines = headers.split("\n");
+        let formatted = "";
+        headerLines.forEach(function (line) {
+            if (line.trim()) {
+                formatted += "  " + line.trim() + "\n";
+            }
+        });
+        return formatted || "  [None]";
+    }
+});
