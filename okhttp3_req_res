@@ -17,8 +17,19 @@ Java.perform(function () {
 
             // Log request headers
             const requestHeaders = request.headers().toString();
-            console.log("Headers:");
-            console.log(formatHeaders(requestHeaders));
+            //console.log("Headers:");
+            //console.log(formatHeaders(requestHeaders));
+
+
+               // Log request headers
+                console.log("xHeaders:");
+                try {
+                    const requestHeaders = request.headers() ? request.headers().toString() : null;
+                    console.log(formatHeaders(requestHeaders));
+                } catch (e) {
+                    console.log("  [Error reading headers: " + e.message + "]");
+                }
+
 
             // Log request body (if present)
             const requestBody = request.body();
