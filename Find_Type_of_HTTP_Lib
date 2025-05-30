@@ -1,0 +1,137 @@
+Java.perform(function () {
+  console.log("[*] Scanning for HTTP/API communication libraries...");
+
+  // List of common HTTP libraries and their package prefixes
+  var httpLibraries = [
+    "com.squareup.okhttp", // OkHttp 2.x
+    "com.squareup.okhttp3", // OkHttp3
+    "java.net.HttpURLConnection", // Android's built-in HttpURLConnection
+    "com.android.volley", // Volley
+    "retrofit2", // Retrofit
+    "org.apache.http", // Apache HttpClient (legacy)
+    "okhttp3", // OkHttp3 (alternative package check)
+  ];
+
+  // Object to track detected libraries
+  var detectedLibraries = {};
+
+  // Step 1: Enumerate loaded classes to find HTTP-related libraries
+  Java.enumerateLoadedClasses({
+    onMatch: function (className) {
+      // Check if the class belongs to a known HTTP library
+      for (var i = 0; i < httpLibraries.length; i++) {
+        if (className.includes(httpLibraries[i])) {
+          console.log("[*] Found HTTP library class: " + className);
+          detectedLibraries[className] = true;
+        }
+      }
+    },
+    onComplete: function () {
+      console.log("[*] Class enumeration complete. Detected libraries:");
+      console.log(JSON.stringify(Object.keys(detectedLibraries), null, 2));
+    }
+  });
+
+  // Step 2: Hook key methods for common HTTP libraries
+  try {
+    // OkHttp 2.x (com.squareup.okhttp)
+    var OkHttpClient = Java.use("com.squareup.okhttp.OkHttpClient");
+    OkHttpClient.open.implementation = function (url) {
+      console.log("[*] OkHttp 2.x: OkHttpClient.open called with URL: " + url.toString());
+      return this.open(url);
+    };
+
+    var Call = Java.use("com.squareup.okhttp.Call");
+    Call.execute.implementation = function () {
+      console.log("[*] OkHttp 2.x: Call.execute called");
+      var request = this.request();
+      console.log("[*] Request URL: " + request.urlString());
+      console.log("[*] Request Method: " + request.method());
+      console.log("[*] Request Headers: " + request.headers().toString());
+      return this.execute();
+    };
+  } catch (e) {
+    console.log("[*] OkHttp 2.x not found or error: " + e);
+  }
+
+  try {
+    // OkHttp3 (com.squareup.okhttp3)
+    var OkHttpClient3 = Java.use("com.squareup.okhttp3.OkHttpClient");
+    OkHttpClient3.newCall.implementation = function (request) {
+      console.log("[*] OkHttp3: OkHttpClient.newCall called");
+      console.log("[*] Request URL: " + request.url().toString());
+      console.log("[*] Request Method: " + request.method().toString());
+      console.log("[*] Request Headers: " + request.headers().toString());
+      return this.newCall(request);
+    };
+  } catch (e) {
+    console.log("[*] OkHttp3 not found or error: " + e);
+  }
+
+  try {
+    // HttpURLConnection
+    var HttpURLConnection = Java.use("java.net.HttpURLConnection");
+    HttpURLConnection.connect.implementation = function () {
+      console.log("[*] HttpURLConnection: connect called");
+      console.log("[*] URL: " + this.getURL().toString());
+      console.log("[*] Method: " + this.getRequestMethod());
+      return this.connect();
+    };
+  } catch (e) {
+    console.log("[*] HttpURLConnection not found or error: " + e);
+  }
+
+  try {
+    // Volley
+    var VolleyRequest = Java.use("com.android.volley.Request");
+    VolleyRequest.getUrl.implementation = function () {
+      var url = this.getUrl();
+      console.log("[*] Volley: Request.getUrl called, URL: " + url);
+      return url;
+    };
+  } catch (e) {
+    console.log("[*] Volley not found or error: " + e);
+  }
+
+  try {
+    // Retrofit
+    var RetrofitCall = Java.use("retrofit2.Call");
+    RetrofitCall.execute.implementation = function () {
+      console.log("[*] Retrofit: Call.execute called");
+      var response = this.execute();
+      console.log("[*] Response: " + response.toString());
+      return response;
+    };
+  } catch (e) {
+    console.log("[*] Retrofit not found or error: " + e);
+  }
+
+  try {
+    // Apache HttpClient (legacy)
+    var HttpClient = Java.use("org.apache.http.client.HttpClient");
+    HttpClient.execute.overload("org.apache.http.client.methods.HttpUriRequest").implementation = function (request) {
+      console.log("[*] Apache HttpClient: execute called");
+      console.log("[*] Request URL: " + request.getURI().toString());
+      console.log("[*] Request Method: " + request.getMethod());
+      return this.execute(request);
+    };
+  } catch (e) {
+    console.log("[*] Apache HttpClient not found or error: " + e);
+  }
+
+  // Step 3: Fallback for custom or obfuscated libraries
+  // Hook generic URL or Socket classes to catch unknown HTTP implementations
+  try {
+    var URL = Java.use("java.net.URL");
+    URL.openConnection.overload().implementation = function () {
+      console.log("[*] Generic: URL.openConnection called");
+      console.log("[*] URL: " + this.toString());
+      return this.openConnection();
+    };
+  } catch (e) {
+    console.log("[*] URL.openConnection hook failed: " + e);
+  }
+
+  // Step 4: Log when any network activity is detected
+  console.log("[*] Script loaded. Interact with the app to trigger HTTP/API calls.");
+});
