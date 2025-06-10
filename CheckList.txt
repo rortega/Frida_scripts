@@ -222,17 +222,40 @@ javascript
 
 +++++++++++++++++++++++++++++++++++
 Java.perform(function () {
-    let X509TrustManager = Java.use("javax.net.ssl.X509TrustManager");
-    X509TrustManager.checkServerTrusted.overload("[Ljava.security.cert.X509Certificate;", "java.lang.String").implementation = function (chain, authType) {
-        console.log("[!] Bypassing SSL checkServerTrusted");
-        return; // Simulate bypass
-    });
+    try {
+        // Hook startActivity
+        let Activity = Java.use("android.app.Activity");
+        Activity.startActivity.overload("android.content.Intent").implementation = function (intent) {
+            try {
+                let action = intent.getAction() || "None";
+                let data = intent.getDataString() || "None";
+                console.log("[Intent] Action: " + action + ", Data: " + data);
+                if (data !== "None" && data.includes("file://")) {
+                    console.log("[!] Potential file exposure via Intent");
+                }
+                return this.startActivity(intent);
+            } catch (e) {
+                console.log("[!] Error in startActivity hook: " + e);
+                return this.startActivity(intent);
+            }
+        };
 
-    let HostnameVerifier = Java.use("javax.net.ssl.HostnameVerifier");
-    HostnameVerifier.verify.overload("java.lang.String", "javax.net.ssl.SSLSession").implementation = function (hostname, session) {
-        console.log(`[!] Bypassing hostname verification for ${hostname}`);
-        return true; // Simulate bypass
-    });
+        // Hook X509TrustManager.checkServerTrusted
+        let X509TrustManager = Java.use("javax.net.ssl.X509TrustManager");
+        X509TrustManager.checkServerTrusted.overload("[Ljava.security.cert.X509Certificate;", "java.lang.String").implementation = function (chain, authType) {
+            console.log("[!] Bypassing SSL checkServerTrusted for authType: " + authType);
+            return; // Bypass certificate validation
+        };
+
+        // Hook HostnameVerifier.verify
+        let HostnameVerifier = Java.use("javax.net.ssl.HostnameVerifier");
+        HostnameVerifier.verify.overload("java.lang.String", "javax.net.ssl.SSLSession").implementation = function (hostname, session) {
+            console.log("[!] Bypassing hostname verification for: " + hostname);
+            return true; // Bypass hostname verification
+        };
+    } catch (e) {
+        console.log("[!] Error in script: " + e);
+    }
 });
 +++++++++++++++++++++++++++++++++++
 
