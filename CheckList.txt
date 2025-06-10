@@ -318,16 +318,32 @@ javascript
 
 +++++++++++++++++++++++++++++++++++
 Java.perform(function () {
+    // Hook the android.app.Activity class
     let Activity = Java.use("android.app.Activity");
+    
+    // Hook the startActivity method with Intent parameter
     Activity.startActivity.overload("android.content.Intent").implementation = function (intent) {
-        let action = intent.getAction();
-        let data = intent.getDataString();
-        console.log(`[Intent] Action: ${action}, Data: ${data || "None"}`);
-        if (data && data.includes("file://")) {
-            console.log("[!] Potential file exposure via Intent");
+        try {
+            // Get the action and data from the intent
+            let action = intent.getAction() || "None";
+            let data = intent.getDataString() || "None";
+            
+            // Log the intent details
+            console.log("[Intent] Action: " + action + ", Data: " + data);
+            
+            // Check for potential file exposure
+            if (data !== "None" && data.includes("file://")) {
+                console.log("[!] Potential file exposure via Intent");
+            }
+            
+            // Call the original startActivity method
+            return this.startActivity(intent);
+        } catch (e) {
+            // Log any errors during hook execution
+            console.log("[!] Error in startActivity hook: " + e);
+            return this.startActivity(intent);
         }
-        return this.startActivity(intent);
-    });
+    };
 });
 +++++++++++++++++++++++++++++++++++
 
