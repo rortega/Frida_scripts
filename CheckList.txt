@@ -535,5 +535,210 @@ Java.perform(function () {
 Vulnerability Indicators:
 FLAG_ALLOW_BACKUP is set.
 
+----------------------------------------------------------
+13. Enumerate Obfuscated OkHttp3 Class.Methods
+----------------------------------------------------------
+
+This script enumerates OkHttp3 classes, hooks all methods of suspected Call classes, and logs the method names when called, helping identify the obfuscated methods used for HTTPS requests.
+
+
++++++++++++++++++++++++++++++++++++
+Java.perform(function () {
+    console.log("[*] Frida script loaded. Probing for OkHttp3 method calls...");
+
+    // Store found OkHttp classes
+    var okHttpClasses = [];
+
+    // Enumerate OkHttp classes
+    function findOkHttpClasses() {
+        Java.enumerateLoadedClasses({
+            onMatch: function (className) {
+                if (className.startsWith("okhttp3.") || className.includes("okhttp3.internal")) {
+                    okHttpClasses.push(className);
+                }
+            },
+            onComplete: function () {
+                console.log("[*] OkHttp3 classes found: " + okHttpClasses.join(", "));
+            }
+        });
+    }
+
+    // Helper function to get request details (if available)
+    function getRequestDetails(obj) {
+        try {
+            // Check if the object has a request() method, common in Call classes
+            var request = obj.request ? obj.request() : null;
+            if (!request) return "[No request details available]";
+            var method = request.method ? request.method() : "UNKNOWN";
+            var url = request.url ? request.url().toString() : "UNKNOWN";
+            return `Method: ${method}, URL: ${url}`;
+        } catch (e) {
+            return "[Unable to get request details: " + e + "]";
+        }
+    }
+
+    // Hook all methods of a class
+    function hookAllMethods(className) {
+        try {
+            var targetClass = Java.use(className);
+            var methods = targetClass.class.getDeclaredMethods();
+            console.log(`[*] Hooking methods for ${className}...`);
+
+            methods.forEach(function (method) {
+                var methodName = method.getName();
+                // Hook each method dynamically
+                try {
+                    targetClass[methodName].implementation = function () {
+                        console.log(`\n[*] Method Called: ${className}.${methodName}`);
+                        console.log(`[*] Arguments: ${JSON.stringify(arguments)}`);
+                        console.log(`[*] Request Details: ${getRequestDetails(this)}`);
+                        // Call the original method
+                        return targetClass[methodName].apply(this, arguments);
+                    };
+                    console.log(`[*] Hooked ${className}.${methodName}`);
+                } catch (e) {
+                    console.log(`[!] Failed to hook ${className}.${methodName}: ${e}`);
+                }
+            });
+        } catch (e) {
+            console.log(`[!] Failed to hook class ${className}: ${e}`);
+        }
+    }
+
+    // Main execution
+    findOkHttpClasses();
+
+    // Hook methods of potential Call classes
+    okHttpClasses.forEach(function (className) {
+        if (
+            className.includes("Call") ||
+            className.includes("okhttp3.internal.connection") ||
+            className.includes("okhttp3.internal.http2")
+        ) {
+            console.log(`[*] Targeting potential Call class: ${className}`);
+            hookAllMethods(className);
+        }
+    });
+
+    // Try standard Call classes as fallback
+    try {
+        var possibleCallClasses = [
+            "okhttp3.Call",
+            "okhttp3.internal.connection.RealCall",
+            "okhttp3.internal.http.CallServerInterceptor$CountingRequestBody"
+        ];
+        possibleCallClasses.forEach(function (className) {
+            try {
+                hookAllMethods(className);
+            } catch (e) {
+                console.log(`[!] Standard class ${className} not found: ${e}`);
+            }
+        });
+    } catch (e) {
+        console.log("[!] Error setting up standard hooks: " + e);
+    }
+
+    console.log("[*] Script ready. Trigger HTTPS requests in the app to capture method calls.");
+});
+
++++++++++++++++++++++++++++++++++++
+
+
++++++++++++++++++++++++++++++++++++
+Java.perform(function () {
+    console.log("[*] Frida script loaded. Hooking obfuscated OkHttp3 method...");
+
+    // Helper function to format headers
+    function formatHeaders(headers) {
+        if (!headers) return "";
+        try {
+            var headerStr = "";
+            var headerArray = headers.toString().split("\n");
+            for (var i = 0; i < headerArray.length; i++) {
+                if (headerArray[i].trim()) {
+                    headerStr += headerArray[i] + "\r\n";
+                }
+            }
+            return headerStr;
+        } catch (e) {
+            return "[Unable to format headers: " + e + "]";
+        }
+    }
+
+    // Helper function to get request body
+    function getRequestBody(request) {
+        if (!request) return "";
+        try {
+            var body = request.body();
+            if (!body) return "";
+            var buffer = Java.use("okio.Buffer").$new();
+            body.writeTo(buffer);
+            return buffer.readUtf8();
+        } catch (e) {
+            return "[Unable to read request body: " + e + "]";
+        }
+    }
+
+    // Helper function to get response body
+    function getResponseBody(response) {
+        if (!response || !response.body()) return "";
+        try {
+            var body = response.body().string();
+            var mediaType = response.body().contentType();
+            var ResponseBodyClass = Java.use("okhttp3.ResponseBody");
+            var newBody = ResponseBodyClass.create(mediaType, body);
+            response.body = function () { return newBody; };
+            return body;
+        } catch (e) {
+            return "[Unable to read response body: " + e + "]";
+        }
+    }
+
+    // Hook the obfuscated method (e.g., okhttp3.internal.http2.b.a)
+   // Modify this as it WILL be different
+    try {
+        var CallClass = Java.use("okhttp3.internal.http2.b");
+        CallClass.a.implementation = function () {
+            var request = this.request();
+            var method = request.method();
+            var url = request.url().toString();
+            var headers = formatHeaders(request.headers());
+            var reqBody = getRequestBody(request);
+
+            console.log("\n=== HTTPS Request ===");
+            console.log(method + " " + url + " HTTP/1.1");
+            console.log(headers);
+            if (reqBody) {
+                console.log(reqBody);
+            }
+            console.log("==================\n");
+
+            var response = this.a();
+
+            var statusCode = response.code();
+            var statusMessage = response.message();
+            var respHeaders = formatHeaders(response.headers());
+            var respBody = getResponseBody(response);
+
+            console.log("=== HTTPS Response ===");
+            console.log("HTTP/1.1 " + statusCode + " " + statusMessage);
+            console.log(respHeaders);
+            if (respBody) {
+                console.log(respBody);
+            }
+            console.log("==================\n");
+
+            return response;
+        };
+        console.log("[*] Hooked okhttp3.internal.http2.b.a");
+    } catch (e) {
+        console.log("[!] Failed to hook okhttp3.internal.http2.b.a: " + e);
+    }
+
+    console.log("[*] Script ready. Trigger HTTPS requests to capture traffic.");
+});
+
++++++++++++++++++++++++++++++++++++
+
 
 
