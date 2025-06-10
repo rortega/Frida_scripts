@@ -459,12 +459,19 @@ javascript
 +++++++++++++++++++++++++++++++++++
 
 Java.perform(function () {
-    let DexClassLoader = Java.use("dalvik.system.DexClassLoader");
-    DexClassLoader.$init.overload("java.lang.String", "java.lang.String", "java.lang.String", "java.lang.ClassLoader").implementation = function (dexPath, optimizedDir, libraryPath, parent) {
-        console.log(`[!] Dynamic code loading detected: ${dexPath}`);
-        return this.$init(dexPath, optimizedDir, libraryPath, parent);
-    });
+    try {
+        // Hook DexClassLoader.$init
+        let DexClassLoader = Java.use("dalvik.system.DexClassLoader");
+        DexClassLoader.$init.overload("java.lang.String", "java.lang.String", "java.lang.String", "java.lang.ClassLoader").implementation = function (dexPath, optimizedDir, libraryPath, parent) {
+            console.log("[!] Dynamic code loading detected: dexPath=" + dexPath + ", optimizedDir=" + optimizedDir + ", libraryPath=" + libraryPath);
+            return this.$init(dexPath, optimizedDir, libraryPath, parent);
+        };
+    } catch (e) {
+        console.log("[!] Error in DexClassLoader hook: " + e);
+    }
 });
+
+
 +++++++++++++++++++++++++++++++++++
 
 Vulnerability Indicators:
