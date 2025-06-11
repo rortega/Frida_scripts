@@ -504,6 +504,78 @@ Use of unsafe functions (strcpy, strcat).
 
 Large memcpy buffers without bounds checking.
 
+
+
+
+String Functions:
+strcat: Concatenates strings without bounds checking (buffer overflow risk). Alternative: strncat.
+
+sprintf: Formats strings without bounds checking (buffer overflow risk). Alternative: snprintf.
+
+vsprintf: Similar to sprintf, but for variable argument lists (buffer overflow risk). Alternative: vsnprintf.
+
+gets: Reads input without bounds checking (buffer overflow risk, deprecated). Alternative: fgets.
+
+Memory Functions:
+memcpy: Copies memory without bounds checking if misused (buffer overflow risk). Safer usage: Validate sizes explicitly, or use memcpy with bounds checking where available.
+
+memset: Fills memory, can cause issues if size is miscalculated (memory corruption). Safer usage: Validate bounds.
+
+memmove: Similar to memcpy, vulnerable if sizes are incorrect (buffer overflow risk). Safer usage: Validate sizes.
+
+Format String Functions:
+printf: Can be misused with user-controlled format strings (format string vulnerabilities). Alternative: Avoid user-controlled format strings or use safer logging.
+
+scanf: Can cause buffer overflows if input size is not not controlled. Alternative: fscanf with bounds checking.
+
+Other Unsafe Functions:
+strlen: Can cause issues if used on non-terminated null-strings (undefined behavior). Safer usage: Ensure null termination or use strnlen.
+
+system: Executes system commands, risky if input is user-controlled (code injection). Alternative: Avoid or use safer APIs (e.g., Android-specific functions).
+
+
+******************************************
+
+// Frida script to monitor unsafe C/C++ functions in an Android app
+(function() {
+    // List of unsafe functions to monitor
+    const unsafeFunctions = [
+        { name: "strcpy", paramDesc: ["dest", "src"], logParams: args => `dest=${args[0]}, src=${args[1].readUtf8String()}` },
+        { name: "strcat", paramDesc: ["dest", "src"], logParams: args => `dest=${args[0]}, src=${args[1].readUtf8String()}` },
+        { name: "sprintf", paramDesc: ["dest", "format"], logParams: args => `dest=${args[0]}, format=${args[1].readUtf8String()}` },
+        { name: "gets", paramDesc: ["buffer"], logParams: args => `buffer=${args[0]}` },
+        { name: "memcpy", paramDesc: ["dest", "src", "n"], logParams: args => `dest=${args[0]}, src=${args[1]}, n=${args[2]}` },
+        { name: "printf", paramDesc: ["format"], logParams: args => `format=${args[1].readUtf8String()}` },
+        { name: "strlen", paramDesc: ["str"], logParams: args => `str=${args[0].readUtf8String()}` }
+    ];
+
+    // Iterate through unsafe functions and attach interceptors
+    unsafeFunctions.forEach(func => {
+        try {
+            const funcPtr = Module.getExportByName(null, func.name);
+            if (funcPtr) {
+                Interceptor.attach(funcPtr, {
+                    onEnter: function(args) {
+                        console.log(`[!] Insecure function ${func.name} called: ${func.logParams(args)}`);
+                    }
+                });
+                console.log(`[+] Hooked ${func.name}`);
+            } else {
+                console.log(`[-] ${func.name} not found in exports`);
+            }
+        } catch (e) {
+            console.log(`[-] Error hooking ${func.name}: ${e}`);
+        }
+    });
+})();
+
+
+******************************************
+
+
+
+
+
 ----------------------------------------------------------
 12. Backup Vulnerabilities
 ----------------------------------------------------------
@@ -697,7 +769,7 @@ Java.perform(function () {
     // Hook the obfuscated method (e.g., okhttp3.internal.http2.b.a)
    // Modify this as it WILL be different
     try {
-        var CallClass = Java.use("okhttp3.internal.http2.b");
+        var CallClass = Java.use("okhttp3.internal.connection.c");
         CallClass.a.implementation = function () {
             var request = this.request();
             var method = request.method();
@@ -730,9 +802,9 @@ Java.perform(function () {
 
             return response;
         };
-        console.log("[*] Hooked okhttp3.internal.http2.b.a");
+        console.log("[*] Hooked okhttp3.........");
     } catch (e) {
-        console.log("[!] Failed to hook okhttp3.internal.http2.b.a: " + e);
+        console.log("[!] Failed to hook : " + e);
     }
 
     console.log("[*] Script ready. Trigger HTTPS requests to capture traffic.");
