@@ -1,0 +1,40 @@
+----------------------------------------------------------
+1. Root Detection Bypass or Weaknesses
+----------------------------------------------------------
+
+Description: Many apps implement root detection to prevent running on rooted devices, but weak or bypassable checks can allow attackers to run the app in insecure environments.
+
+Why Check: Bypassing root detection indicates the app’s security measures are ineffective, exposing it to tampering or debugging.
+
+Frida Check:
+Hook common root detection methods (e.g., checking for su, Superuser.apk, or Build.TAGS).
+
+Log or bypass the detection logic to test its robustness.
+
+Sample Script:
+javascript
++++++++++++++++++++++++++++++++++++
+Java.perform(function () {
+    console.log("[*] Checking for root detection...");
+    let Runtime = Java.use("java.lang.Runtime");
+    Runtime.exec.overload("java.lang.String").implementation = function (cmd) {
+        console.log(`[Root Detection] Exec: ${cmd}`);
+        if (cmd.includes("su") || cmd.includes("which")) {
+            console.log("[!] Root detection attempt detected");
+            return null; // Simulate no root
+        }
+        return this.exec(cmd);
+    });
+
+    let Build = Java.use("android.os.Build");
+    Build.TAGS.get.implementation = function () {
+        console.log("[Root Detection] Build.TAGS checked");
+        return "release-keys"; // Spoof non-rooted device
+    });
+});
++++++++++++++++++++++++++++++++++++
+
+Vulnerability Indicators:
+Detection methods are easily bypassed (e.g., returning null for su checks).
+
+Hardcoded checks for files like /system/app/Superuser.apk.
