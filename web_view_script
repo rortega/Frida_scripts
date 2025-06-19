@@ -1,0 +1,15 @@
+Java.perform(function () {
+    var WebSettings = Java.use("android.webkit.WebSettings");
+    WebSettings.setJavaScriptEnabled.implementation = function (enabled) {
+        if (enabled) {
+            console.log("[!] WebView JavaScript enabled - Potential XSS risk");
+        }
+        return this.setJavaScriptEnabled(enabled);
+    };
+    WebSettings.setAllowFileAccess.implementation = function (allow) {
+        if (allow) {
+            console.log("[!] WebView file access enabled - Potential file exposure");
+        }
+        return this.setAllowFileAccess(allow);
+    };
+});
