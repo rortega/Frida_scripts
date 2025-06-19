@@ -1,0 +1,113 @@
+Java.perform(function () {
+    try {
+        console.log("[*] Script started");
+
+        // Anti-tampering bypass
+        try {
+            var System = Java.use("java.lang.System");
+            System.loadLibrary.overload("java.lang.String").implementation = function (libName) {
+                if (libName === "frida-gadget") {
+                    console.log("[*] Skipping frida-gadget detection");
+                    return;
+                }
+                return this.loadLibrary(libName);
+            };
+            var Runtime = Java.use("java.lang.Runtime");
+            Runtime.exec.overload("java.lang.String").implementation = function (cmd) {
+                if (cmd.includes("frida")) {
+                    console.log("[*] Bypassing Runtime.exec: " + cmd);
+                    throw new Java.use("java.io.IOException").$new("Command not found");
+                }
+                return this.exec(cmd);
+            };
+            console.log("[*] Anti-tampering bypass applied");
+        } catch (e) {
+            console.log("[*] Error setting up anti-tampering bypass: " + e);
+        }
+
+        // Function to hook SharedPreferences and Log
+        function hookSensitiveData() {
+            // Hook SharedPreferences$Editor.putString
+            try {
+                let SharedPreferencesEditor = Java.use("android.content.SharedPreferences$Editor");
+                console.log("[*] SharedPreferences$Editor class found");
+
+                // Verify putString method exists
+                if (typeof SharedPreferencesEditor.putString === "function") {
+                    SharedPreferencesEditor.putString.implementation = function (key, value) {
+                        console.log(`[SharedPreferences] Storing: ${key} = ${value}`);
+                        if (key.toLowerCase().includes("password") || key.toLowerCase().includes("token")) {
+                            console.log("[!] Sensitive data stored in SharedPreferences");
+                        }
+                        return this.putString(key, value);
+                    };
+                    console.log("[*] Hooked SharedPreferences$Editor.putString");
+                } else {
+                    console.log("[!] Error: putString method not found on SharedPreferences$Editor");
+                }
+            } catch (e) {
+                console.log("[*] Error hooking SharedPreferences$Editor: " + e);
+            }
+
+            // Hook Log.d
+            try {
+                let Log = Java.use("android.util.Log");
+                console.log("[*] Log class found");
+
+                // Hook Log.d(String, String)
+                Log.d.overload("java.lang.String", "java.lang.String").implementation = function (tag, msg) {
+                    console.log(`[Log] ${tag}: ${msg}`);
+                    if (msg.toLowerCase().includes("key") || msg.toLowerCase().includes("secret")) {
+                        console.log("[!] Sensitive data in logs");
+                    }
+                    return this.d(tag, msg);
+                };
+                console.log("[*] Hooked Log.d");
+            } catch (e) {
+                console.log("[*] Error hooking Log.d: " + e);
+            }
+        }
+
+        // Execute hooking immediately
+        hookSensitiveData();
+
+        // Expose to REPL
+        rpc.exports = {
+            hooksensitivedata: function () {
+                try {
+                    console.log("[*] Executing hooksensitivedata via rpc.exports");
+                    hookSensitiveData();
+                    return "[*] Sensitive data hooking completed.";
+                } catch (e) {
+                    console.log("[*] Error in hooksensitivedata: " + e);
+                    return "[*] Error: " + e.message;
+                }
+            }
+        };
+
+        // Global function
+        global.hookSensitiveData = function () {
+            try {
+                console.log("[*] Executing hookSensitiveData via global function");
+                if (rpc.exports.hooksensitivedata) {
+                    return rpc.exports.hooksensitivedata();
+                } else {
+                    console.log("[*] Error: rpc.exports.hooksensitivedata not defined");
+                    hookSensitiveData();
+                    return "[*] Executed hookSensitiveData directly";
+                }
+            } catch (e) {
+                console.log("[*] Error in global hookSensitiveData: " + e);
+                return "[*] Error: " + e.message;
+            }
+        };
+
+        // Debugging
+        console.log("[*] Script loaded successfully.");
+        console.log("[*] rpc.exports.hooksensitivedata: " + (typeof rpc.exports.hooksensitivedata));
+        console.log("[*] global.hookSensitiveData: " + (typeof global.hookSensitiveData));
+        console.log("[*] Use 'rpc.exports.hooksensitivedata()' or 'hookSensitiveData()' in the REPL.");
+    } catch (e) {
+        console.log("[*] Error initializing script: " + e);
+    }
+});
