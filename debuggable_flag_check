@@ -1,14 +1,4 @@
-Description: Apps with android:debuggable="true" in the manifest are vulnerable to debugging, allowing attackers to attach debuggers or inspect runtime behavior.
 
-Why Check: Debuggable apps expose sensitive data and logic, increasing the risk of reverse engineering.
-
-Frida Check:
-Inspect the app’s ApplicationInfo to check the FLAG_DEBUGGABLE status.
-
-Sample Script:
-javascript
-
-+++++++++++++++++++++++++++++++++++
 Java.perform(function () {
     let ApplicationInfo = Java.use("android.content.pm.ApplicationInfo");
     let context = Java.use("android.app.ActivityThread").currentApplication().getApplicationContext();
@@ -23,4 +13,4 @@ Java.perform(function () {
         }
     });
 });
-+++++++++++++++++++++++++++++++++++
+
