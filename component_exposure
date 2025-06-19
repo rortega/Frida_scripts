@@ -1,0 +1,11 @@
+Java.perform(function () {
+    let context = Java.use("android.app.ActivityThread").currentApplication().getApplicationContext();
+    let packageManager = context.getPackageManager();
+    let packageName = context.getPackageName();
+    let activities = packageManager.getPackageInfo(packageName, 1).activities.value;
+    for (let i = 0; i < activities.length; i++) {
+        if (activities[i].exported.value) {
+            console.log(`[!] Exported Activity: ${activities[i].name.value}`);
+        }
+    }
+});
